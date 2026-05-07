@@ -269,6 +269,7 @@ function StatCard({
 }
 
 function ControlPanel({
+  isAdmin,
   hardwareLive,
   setHardwareLive,
   wind,
@@ -277,6 +278,7 @@ function ControlPanel({
   onExportCsv,
   onKillRandom,
 }: {
+  isAdmin: boolean;
   hardwareLive: boolean;
   setHardwareLive: (v: boolean) => void;
   wind: number;
@@ -287,17 +289,25 @@ function ControlPanel({
 }) {
   return (
     <div className="panel p-4 space-y-4">
-      <h3 className="text-sm uppercase tracking-widest text-muted-foreground">
-        Control Panel
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm uppercase tracking-widest text-muted-foreground">
+          Control Panel
+        </h3>
+        {!isAdmin && (
+          <span className="text-[10px] flex items-center gap-1 text-muted-foreground">
+            <Lock size={10} /> limited
+          </span>
+        )}
+      </div>
 
       <button
         onClick={() => setHardwareLive(!hardwareLive)}
+        disabled={!isAdmin}
         className={`w-full flex items-center justify-between px-3 py-2 rounded border ${
           hardwareLive
             ? "border-primary bg-primary/10 text-primary"
             : "border-border hover:bg-secondary"
-        }`}
+        } disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <span className="flex items-center gap-2 text-sm">
           {hardwareLive ? <Radio size={14} /> : <Power size={14} />}
@@ -340,9 +350,10 @@ function ControlPanel({
       </div>
       <button
         onClick={onKillRandom}
-        className="w-full text-xs py-2 rounded border border-destructive/40 text-destructive hover:bg-destructive/10 flex items-center justify-center gap-1"
+        disabled={!isAdmin}
+        className="w-full text-xs py-2 rounded border border-destructive/40 text-destructive hover:bg-destructive/10 flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <Skull size={12} /> Simulate Node Failure
+        {isAdmin ? <Skull size={12} /> : <Lock size={12} />} Simulate Node Failure
       </button>
     </div>
   );
