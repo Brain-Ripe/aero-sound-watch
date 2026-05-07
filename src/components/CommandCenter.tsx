@@ -16,7 +16,7 @@ import { SensorMap } from "./SensorMap";
 import { SensorChart } from "./SensorChart";
 
 function useEngine() {
-  const ref = useRef<AcousticEngine>();
+  const ref = useRef<AcousticEngine | null>(null);
   if (!ref.current) ref.current = new AcousticEngine(5);
   return ref.current;
 }
@@ -44,7 +44,7 @@ export function CommandCenter() {
   const selected = useMemo(
     () => engine.nodes.find((n) => n.id === selectedId) ?? null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedId, engine.nodes.length, engine.tick],
+    [selectedId, engine.nodes.length, engine.alerts.length],
   );
 
   const counts = useMemo(() => {
