@@ -140,12 +140,15 @@ export function CommandCenter() {
             </h2>
             <button
               onClick={() => {
+                if (!isAdmin) return toast.error("Admin only: Reset fires");
                 engine.clearFires();
                 force((n) => n + 1);
               }}
-              className="text-xs flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-secondary"
+              disabled={!isAdmin}
+              title={isAdmin ? "Reset all fires" : "Admin only"}
+              className="text-xs flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <RefreshCcw size={12} /> Reset Fires
+              {isAdmin ? <RefreshCcw size={12} /> : <Lock size={12} />} Reset Fires
             </button>
           </div>
           <SensorMap
@@ -153,23 +156,37 @@ export function CommandCenter() {
             fires={engine.fires}
             selectedId={selectedId}
             onPlaceFire={(x, y) => {
+              if (!isAdmin) {
+                toast.error("Admin only: Igniting test fires requires admin role");
+                return;
+              }
               engine.placeFire(x, y);
               force((n) => n + 1);
             }}
             onSelectNode={setSelectedId}
           />
+          {!isAdmin && (
+            <p className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1">
+              <Lock size={11} /> Read-only view. Admins can ignite test fires and reset state.
+            </p>
+          )}
         </section>
 
         {/* Right column */}
         <aside className="col-span-12 lg:col-span-4 space-y-4">
           <ControlPanel
+            isAdmin={isAdmin}
             hardwareLive={hardwareLive}
-            setHardwareLive={setHardwareLive}
+            setHardwareLive={(v) => {
+              if (!isAdmin) return toast.error("Admin only: Hardware mode");
+              setHardwareLive(v);
+            }}
             wind={wind}
             setWind={setWind}
             onExportJson={() => download("json")}
             onExportCsv={() => download("csv")}
             onKillRandom={() => {
+              if (!isAdmin) return toast.error("Admin only: Simulate node failure");
               const alive = engine.nodes.filter((n) => n.status !== "CRITICAL");
               if (alive.length) engine.killNode(alive[Math.floor(Math.random() * alive.length)].id);
               force((n) => n + 1);
