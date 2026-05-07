@@ -4,16 +4,22 @@ import {
   AlertTriangle,
   Download,
   Flame,
+  LogOut,
+  Lock,
   Power,
   Radio,
   RefreshCcw,
+  ShieldCheck,
   Skull,
+  User as UserIcon,
   Waves,
   Wind,
 } from "lucide-react";
-import { AcousticEngine, type SensorNode } from "@/lib/acoustic-engine";
+import { toast } from "sonner";
+import { AcousticEngine } from "@/lib/acoustic-engine";
 import { SensorMap } from "./SensorMap";
 import { SensorChart } from "./SensorChart";
+import { useAuth } from "@/lib/auth-context";
 
 function useEngine() {
   const ref = useRef<AcousticEngine | null>(null);
@@ -23,10 +29,13 @@ function useEngine() {
 
 export function CommandCenter() {
   const engine = useEngine();
+  const { user, role, signOut } = useAuth();
+  const isAdmin = role === "admin";
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hardwareLive, setHardwareLive] = useState(false);
   const [wind, setWind] = useState(0.3);
+  const lastNotifiedFire = useRef<string | null>(null);
 
   useEffect(() => {
     engine.windNoise = wind;
@@ -36,6 +45,14 @@ export function CommandCenter() {
   useEffect(() => {
     const id = setInterval(() => {
       engine.step();
+      // Notify on newest unseen wildfire-confirmed event (idempotent per event)
+      const newest = engine.alerts.find((a) => a.type === "WILDFIRE_CONFIRMED");
+      if (newest && newest.id !== lastNotifiedFire.current) {
+        lastNotifiedFire.current = newest.id;
+        toast.error(`🔥 Wildfire confirmed at ${newest.nodeId}`, {
+          description: newest.message,
+        });
+      }
       force((n) => n + 1);
     }, 1000);
     return () => clearInterval(id);
@@ -82,12 +99,28 @@ export function CommandCenter() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
-            <span className="flex items-center gap-1.5">
+          <div className="flex items-center gap-4 text-xs font-mono">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
               <span className="w-1.5 h-1.5 rounded-full bg-healthy animate-pulse" />
               SYS ONLINE
             </span>
-            <span>v ≈ 331.3·√(1+T/273.15)</span>
+            <span
+              className={`hidden md:flex items-center gap-1 px-2 py-0.5 rounded border ${
+                isAdmin
+                  ? "border-primary/40 text-primary"
+                  : "border-border text-muted-foreground"
+              }`}
+            >
+              {isAdmin ? <ShieldCheck size={12} /> : <UserIcon size={12} />}
+              {isAdmin ? "ADMIN" : "OPERATOR"}
+            </span>
+            <span className="hidden lg:inline text-muted-foreground">{user?.email}</span>
+            <button
+              onClick={() => signOut()}
+              className="flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-secondary"
+            >
+              <LogOut size={12} /> Sign out
+            </button>
           </div>
         </div>
       </header>
@@ -107,12 +140,15 @@ export function CommandCenter() {
             </h2>
             <button
               onClick={() => {
+                if (!isAdmin) return toast.error("Admin only: Reset fires");
                 engine.clearFires();
                 force((n) => n + 1);
               }}
-              className="text-xs flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-secondary"
+              disabled={!isAdmin}
+              title={isAdmin ? "Reset all fires" : "Admin only"}
+              className="text-xs flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <RefreshCcw size={12} /> Reset Fires
+              {isAdmin ? <RefreshCcw size={12} /> : <Lock size={12} />} Reset Fires
             </button>
           </div>
           <SensorMap
@@ -120,23 +156,37 @@ export function CommandCenter() {
             fires={engine.fires}
             selectedId={selectedId}
             onPlaceFire={(x, y) => {
+              if (!isAdmin) {
+                toast.error("Admin only: Igniting test fires requires admin role");
+                return;
+              }
               engine.placeFire(x, y);
               force((n) => n + 1);
             }}
             onSelectNode={setSelectedId}
           />
+          {!isAdmin && (
+            <p className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1">
+              <Lock size={11} /> Read-only view. Admins can ignite test fires and reset state.
+            </p>
+          )}
         </section>
 
         {/* Right column */}
         <aside className="col-span-12 lg:col-span-4 space-y-4">
           <ControlPanel
+            isAdmin={isAdmin}
             hardwareLive={hardwareLive}
-            setHardwareLive={setHardwareLive}
+            setHardwareLive={(v) => {
+              if (!isAdmin) return toast.error("Admin only: Hardware mode");
+              setHardwareLive(v);
+            }}
             wind={wind}
             setWind={setWind}
             onExportJson={() => download("json")}
             onExportCsv={() => download("csv")}
             onKillRandom={() => {
+              if (!isAdmin) return toast.error("Admin only: Simulate node failure");
               const alive = engine.nodes.filter((n) => n.status !== "CRITICAL");
               if (alive.length) engine.killNode(alive[Math.floor(Math.random() * alive.length)].id);
               force((n) => n + 1);
@@ -219,6 +269,7 @@ function StatCard({
 }
 
 function ControlPanel({
+  isAdmin,
   hardwareLive,
   setHardwareLive,
   wind,
@@ -227,6 +278,7 @@ function ControlPanel({
   onExportCsv,
   onKillRandom,
 }: {
+  isAdmin: boolean;
   hardwareLive: boolean;
   setHardwareLive: (v: boolean) => void;
   wind: number;
@@ -237,17 +289,25 @@ function ControlPanel({
 }) {
   return (
     <div className="panel p-4 space-y-4">
-      <h3 className="text-sm uppercase tracking-widest text-muted-foreground">
-        Control Panel
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm uppercase tracking-widest text-muted-foreground">
+          Control Panel
+        </h3>
+        {!isAdmin && (
+          <span className="text-[10px] flex items-center gap-1 text-muted-foreground">
+            <Lock size={10} /> limited
+          </span>
+        )}
+      </div>
 
       <button
         onClick={() => setHardwareLive(!hardwareLive)}
+        disabled={!isAdmin}
         className={`w-full flex items-center justify-between px-3 py-2 rounded border ${
           hardwareLive
             ? "border-primary bg-primary/10 text-primary"
             : "border-border hover:bg-secondary"
-        }`}
+        } disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <span className="flex items-center gap-2 text-sm">
           {hardwareLive ? <Radio size={14} /> : <Power size={14} />}
@@ -290,9 +350,10 @@ function ControlPanel({
       </div>
       <button
         onClick={onKillRandom}
-        className="w-full text-xs py-2 rounded border border-destructive/40 text-destructive hover:bg-destructive/10 flex items-center justify-center gap-1"
+        disabled={!isAdmin}
+        className="w-full text-xs py-2 rounded border border-destructive/40 text-destructive hover:bg-destructive/10 flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <Skull size={12} /> Simulate Node Failure
+        {isAdmin ? <Skull size={12} /> : <Lock size={12} />} Simulate Node Failure
       </button>
     </div>
   );
