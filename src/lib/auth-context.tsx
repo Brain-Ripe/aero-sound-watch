@@ -38,13 +38,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!session?.user) return;
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", session.user.id);
       if (cancelled) return;
+      if (error) {
+        console.error("[auth] role fetch error:", error);
+      }
       const roles = (data ?? []).map((r) => r.role as Role);
-      setRole(roles.includes("admin") ? "admin" : roles.includes("user") ? "user" : "user");
+      const resolved: Role = roles.includes("admin") ? "admin" : "user";
+      console.info("[auth] resolved role:", resolved, "raw:", data);
+      setRole(resolved);
       setLoading(false);
     })();
     return () => {
