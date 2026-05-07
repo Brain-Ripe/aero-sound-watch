@@ -4,16 +4,22 @@ import {
   AlertTriangle,
   Download,
   Flame,
+  LogOut,
+  Lock,
   Power,
   Radio,
   RefreshCcw,
+  ShieldCheck,
   Skull,
+  User as UserIcon,
   Waves,
   Wind,
 } from "lucide-react";
-import { AcousticEngine, type SensorNode } from "@/lib/acoustic-engine";
+import { toast } from "sonner";
+import { AcousticEngine } from "@/lib/acoustic-engine";
 import { SensorMap } from "./SensorMap";
 import { SensorChart } from "./SensorChart";
+import { useAuth } from "@/lib/auth-context";
 
 function useEngine() {
   const ref = useRef<AcousticEngine | null>(null);
@@ -23,10 +29,13 @@ function useEngine() {
 
 export function CommandCenter() {
   const engine = useEngine();
+  const { user, role, signOut } = useAuth();
+  const isAdmin = role === "admin";
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hardwareLive, setHardwareLive] = useState(false);
   const [wind, setWind] = useState(0.3);
+  const lastNotifiedFire = useRef<string | null>(null);
 
   useEffect(() => {
     engine.windNoise = wind;
