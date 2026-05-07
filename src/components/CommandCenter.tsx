@@ -45,6 +45,14 @@ export function CommandCenter() {
   useEffect(() => {
     const id = setInterval(() => {
       engine.step();
+      // Notify on newest unseen wildfire-confirmed event (idempotent per event)
+      const newest = engine.alerts.find((a) => a.type === "WILDFIRE_CONFIRMED");
+      if (newest && newest.id !== lastNotifiedFire.current) {
+        lastNotifiedFire.current = newest.id;
+        toast.error(`🔥 Wildfire confirmed at ${newest.nodeId}`, {
+          description: newest.message,
+        });
+      }
       force((n) => n + 1);
     }, 1000);
     return () => clearInterval(id);
@@ -91,12 +99,28 @@ export function CommandCenter() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
-            <span className="flex items-center gap-1.5">
+          <div className="flex items-center gap-4 text-xs font-mono">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
               <span className="w-1.5 h-1.5 rounded-full bg-healthy animate-pulse" />
               SYS ONLINE
             </span>
-            <span>v ≈ 331.3·√(1+T/273.15)</span>
+            <span
+              className={`hidden md:flex items-center gap-1 px-2 py-0.5 rounded border ${
+                isAdmin
+                  ? "border-primary/40 text-primary"
+                  : "border-border text-muted-foreground"
+              }`}
+            >
+              {isAdmin ? <ShieldCheck size={12} /> : <UserIcon size={12} />}
+              {isAdmin ? "ADMIN" : "OPERATOR"}
+            </span>
+            <span className="hidden lg:inline text-muted-foreground">{user?.email}</span>
+            <button
+              onClick={() => signOut()}
+              className="flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-secondary"
+            >
+              <LogOut size={12} /> Sign out
+            </button>
           </div>
         </div>
       </header>
